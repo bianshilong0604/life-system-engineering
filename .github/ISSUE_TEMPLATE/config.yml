@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: 📖 先读 README / 系统说明
+    url: https://github.com/bianshilong0604/life-system-engineering#readme
+    about: 用法疑问建议先看 README 和 系统说明.md
