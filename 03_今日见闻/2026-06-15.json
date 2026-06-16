@@ -1,0 +1,29 @@
+{
+  "date": "2026-06-15",
+  "items": [
+    {
+      "id": 1,
+      "time": "23:49",
+      "type": "video",
+      "platform": "bilibili",
+      "title": "示例：某工具使用讲解（示例条目，展示见闻池结构）",
+      "summary": "# 示例：某工具使用讲解\n\n> 这是一条**示例**见闻条目，展示今日见闻池的数据结构。\n> 真实使用时，summary 字段存的是视频总结/灵感分析的结构化 Markdown。\n\n## 结构说明\n\n每条见闻包含：\n- title / time / type(video|inspiration) / platform\n- summary（结构化正文）\n- raw（原文，灵感类才有）\n- source_url / status(pending|archived|discarded) / kb_file\n\n归档后 kb_file 指向 学习成长_知识库/ 里的沉淀文件。",
+      "raw": "",
+      "source_url": "https://example.com/sample",
+      "status": "archived",
+      "kb_file": ""
+    },
+    {
+      "id": 2,
+      "time": "23:49",
+      "type": "inspiration",
+      "platform": "",
+      "title": "示例：早晨跑步时想到的一个灵感（示例条目）",
+      "summary": "# 示例灵感\n\n> 这是一条**示例**灵感条目，展示 inspiration 类型的结构。\n> 真实使用时，这里存的是 LLM 对你随手记想法的结构化分析。\n\n包含：一句话提炼 / 展开思考 / 可落地方向 / 价值判断 / 相关 `[[双链]]`。",
+      "raw": "示例：早晨跑步时想到的一个一闪而过的想法（原文会存在 raw 字段）。",
+      "source_url": "",
+      "status": "discarded",
+      "kb_file": null
+    }
+  ]
+}

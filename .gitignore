@@ -1,0 +1,8 @@
+# 密钥与本地配置 —— 绝不外传
+tools/.env
+tools/models.json
+.env
+
+# Python
+__pycache__/
+*.pyc

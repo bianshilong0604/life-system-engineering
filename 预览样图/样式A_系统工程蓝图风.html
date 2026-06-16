@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>样式A · 系统工程蓝图风</title>
+<style>
+  :root{
+    --bg:#0a0e1a; --panel:#0f1626; --panel2:#131c30;
+    --line:#1d2b45; --cyan:#3fd0ff; --cyan-dim:#1c6f8f;
+    --txt:#c5d6ec; --txt-dim:#6f87a8; --green:#39d98a; --amber:#ffb648; --red:#ff6b6b;
+    --grid:rgba(63,208,255,.05);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{
+    background:var(--bg);
+    background-image:
+      linear-gradient(var(--grid) 1px,transparent 1px),
+      linear-gradient(90deg,var(--grid) 1px,transparent 1px);
+    background-size:32px 32px;
+    color:var(--txt);
+    font-family:"Cascadia Code","Consolas",-apple-system,"Microsoft YaHei",sans-serif;
+    padding:28px;line-height:1.55;
+  }
+  .tag{color:var(--cyan-dim);font-size:11px;letter-spacing:2px;text-transform:uppercase}
+  header{
+    display:flex;justify-content:space-between;align-items:flex-end;
+    border-bottom:1px solid var(--line);padding-bottom:16px;margin-bottom:24px;
+  }
+  header h1{font-size:22px;font-weight:600;color:#fff;letter-spacing:1px}
+  header h1 b{color:var(--cyan)}
+  .status{text-align:right;font-size:12px;color:var(--txt-dim)}
+  .status .dot{color:var(--green)}
+  .grid2{display:grid;grid-template-columns:1.3fr 1fr;gap:20px;margin-bottom:20px}
+  .panel{
+    background:var(--panel);border:1px solid var(--line);border-radius:6px;
+    padding:18px 20px;position:relative;
+  }
+  .panel::before{
+    content:"";position:absolute;top:0;left:0;width:8px;height:8px;
+    border-top:1px solid var(--cyan);border-left:1px solid var(--cyan);
+  }
+  .panel::after{
+    content:"";position:absolute;bottom:0;right:0;width:8px;height:8px;
+    border-bottom:1px solid var(--cyan);border-right:1px solid var(--cyan);
+  }
+  .panel h2{font-size:13px;color:var(--cyan);letter-spacing:1px;margin-bottom:14px;font-weight:600}
+  /* 闭环 */
+  .loop{display:flex;align-items:center;justify-content:space-between;gap:6px;padding:12px 0}
+  .node{
+    flex:1;text-align:center;padding:14px 6px;border:1px solid var(--cyan-dim);
+    border-radius:4px;background:var(--panel2);font-size:13px;position:relative;
+  }
+  .node .n{display:block;color:var(--cyan);font-size:10px;margin-bottom:4px}
+  .node.meta{border-color:var(--amber);}
+  .node.meta .n{color:var(--amber)}
+  .arrow{color:var(--cyan-dim);font-size:18px;flex:0 0 auto}
+  .loop-note{text-align:center;color:var(--txt-dim);font-size:11px;margin-top:10px}
+  /* 子系统卡 */
+  .subs{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:20px}
+  .sub{
+    background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:16px;
+    border-top:2px solid var(--cyan);
+  }
+  .sub.meta{border-top-color:var(--amber)}
+  .sub h3{font-size:15px;color:#fff;margin-bottom:4px}
+  .sub .sub-en{font-size:10px;color:var(--txt-dim);letter-spacing:1px;margin-bottom:12px}
+  .metric{display:flex;justify-content:space-between;font-size:12px;padding:4px 0;border-bottom:1px dashed var(--line)}
+  .metric:last-child{border:none}
+  .metric .v{color:var(--cyan);font-weight:600}
+  .bar{height:4px;background:var(--panel2);border-radius:2px;margin-top:10px;overflow:hidden}
+  .bar i{display:block;height:100%;background:linear-gradient(90deg,var(--cyan-dim),var(--cyan))}
+  /* 规则 / 复盘 */
+  .rule{font-size:12px;padding:8px 0;border-bottom:1px solid var(--line)}
+  .rule:last-child{border:none}
+  .rule .rid{color:var(--amber);font-weight:600;margin-right:8px}
+  .hist{font-size:12px;padding:7px 0;border-bottom:1px solid var(--line);display:flex;justify-content:space-between}
+  .hist:last-child{border:none}
+  .hist .d{color:var(--txt-dim)}
+  /* AI 按钮 */
+  .actions{display:flex;gap:12px;flex-wrap:wrap}
+  .btn{
+    flex:1;min-width:140px;background:var(--panel2);border:1px solid var(--cyan-dim);
+    color:var(--cyan);padding:14px;border-radius:5px;cursor:pointer;font-size:13px;
+    transition:.15s;font-family:inherit;text-align:left;
+  }
+  .btn:hover{background:var(--cyan);color:#06121b;box-shadow:0 0 18px rgba(63,208,255,.35)}
+  .btn .bd{display:block;font-size:10px;color:var(--txt-dim);margin-top:3px}
+  .btn:hover .bd{color:#06121b}
+  footer{margin-top:24px;text-align:center;color:var(--txt-dim);font-size:11px;letter-spacing:1px}
+  .demo-banner{background:rgba(255,182,72,.1);border:1px solid var(--amber);color:var(--amber);
+    padding:8px 14px;border-radius:4px;font-size:12px;margin-bottom:20px;text-align:center}
+</style>
+</head>
+<body>
+  <div class="demo-banner">⚠ 这是样式预览(假数据)。选定风格后再接入你的真实文件与 AI。</div>
+
+  <header>
+    <div>
+      <div class="tag">Personal Total Design Department</div>
+      <h1>个人<b>总体设计部</b></h1>
+    </div>
+    <div class="status">
+      <div><span class="dot">●</span> 系统运行中</div>
+      <div>主时钟:每周复盘 · 下次 D-2</div>
+      <div>2026-06-15 · 活跃子系统 3</div>
+    </div>
+  </header>
+
+  <div class="grid2">
+    <div class="panel">
+      <h2>// 核心闭环 CLOSED LOOP</h2>
+      <div class="loop">
+        <div class="node"><span class="n">PLAN</span>计划</div>
+        <span class="arrow">→</span>
+        <div class="node"><span class="n">EXECUTE</span>执行</div>
+        <span class="arrow">→</span>
+        <div class="node"><span class="n">VERIFY</span>验证</div>
+        <span class="arrow">→</span>
+        <div class="node meta"><span class="n">REFLECT</span>反思</div>
+        <span class="arrow">→</span>
+        <div class="node meta"><span class="n">PATCH</span>修补</div>
+      </div>
+      <div class="loop-note">↺ 每周一次,把"做没做到"喂回系统 · 蓝=执行层 黄=元层</div>
+    </div>
+    <div class="panel">
+      <h2>// 硬约束 HARD CONSTRAINTS</h2>
+      <div class="rule"><span class="rid">●</span>23:30 手机离卧室放客厅</div>
+      <div class="rule"><span class="rid">●</span>22:00 后代码只读不写</div>
+      <div class="rule"><span class="rid">●</span>每日身体活动 ≥ 1 次</div>
+      <div class="rule"><span class="rid">●</span>重大决策必过夜再定</div>
+    </div>
+  </div>
+
+  <div class="subs">
+    <div class="sub">
+      <h3>研究工作</h3><div class="sub-en">RESEARCH · 执行层</div>
+      <div class="metric"><span>本周投入</span><span class="v">18.5h</span></div>
+      <div class="metric"><span>进行中事项</span><span class="v">2</span></div>
+      <div class="metric"><span>上周完成率</span><span class="v">75%</span></div>
+      <div class="bar"><i style="width:75%"></i></div>
+    </div>
+    <div class="sub">
+      <h3>学习成长</h3><div class="sub-en">LEARNING · 执行层</div>
+      <div class="metric"><span>知识库条目</span><span class="v">12</span></div>
+      <div class="metric"><span>本周新增</span><span class="v">3</span></div>
+      <div class="metric"><span>上周完成率</span><span class="v">60%</span></div>
+      <div class="bar"><i style="width:60%"></i></div>
+    </div>
+    <div class="sub meta">
+      <h3>复盘进化</h3><div class="sub-en">REVIEW · 元层</div>
+      <div class="metric"><span>累计复盘</span><span class="v">5 次</span></div>
+      <div class="metric"><span>规则库</span><span class="v">3 条</span></div>
+      <div class="metric"><span>连续坚持</span><span class="v">5 周</span></div>
+      <div class="bar"><i style="width:90%;background:linear-gradient(90deg,#8a5a1c,var(--amber))"></i></div>
+    </div>
+  </div>
+
+  <div class="grid2">
+    <div class="panel">
+      <h2>// 规则库 RULES (3)</h2>
+      <div class="rule"><span class="rid">R1</span>22:00 后代码仓库只读 — 防深夜瞎改</div>
+      <div class="rule"><span class="rid">R2</span>承诺前先占日历格子 — 防高估时间</div>
+      <div class="rule"><span class="rid">R3</span>重大决策睡一觉再定 — 防冲动</div>
+    </div>
+    <div class="panel">
+      <h2>// 复盘历史 REVIEW LOG</h2>
+      <div class="hist"><span>2026-06-15 本周复盘</span><span class="d">最新</span></div>
+      <div class="hist"><span>2026-06-08 本周复盘</span><span class="d">7d ago</span></div>
+      <div class="hist"><span>2026-06-01 本周复盘</span><span class="d">14d ago</span></div>
+      <div class="hist"><span>2026-05-25 本周复盘</span><span class="d">21d ago</span></div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>// AI 操作台 — 调用 LLM 辅助</h2>
+    <div class="actions">
+      <button class="btn">▶ 本周复盘<span class="bd">review · 跑完整闭环</span></button>
+      <button class="btn">▶ 踩坑记一笔<span class="bd">pit · 判断是否入库</span></button>
+      <button class="btn">▶ 沉淀知识<span class="bd">learn · 结构化存档</span></button>
+      <button class="btn">▶ 月度体检<span class="bd">checkup · 看系统轻/重</span></button>
+    </div>
+  </div>
+
+  <footer>SYSTEM ENGINEERING BLUEPRINT · 钱学森系统工程思想 · 样式 A</footer>
+</body>
+</html>
