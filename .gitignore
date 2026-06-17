@@ -3,6 +3,10 @@ tools/.env
 tools/models.json
 .env
 
+# 真实日记是私人的 —— 只保留 README 占位与格式示例,你自己的日记别提交
+03_每日日记/2026-*.md
+03_每日日记/*_周整理_*.md
+
 # Python
 __pycache__/
 *.pyc

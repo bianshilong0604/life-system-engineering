@@ -10,6 +10,8 @@
   python assistant.py pit        # 踩坑即时记一笔
   python assistant.py learn <文件或文本>   # 把一个输入沉淀进知识库
   python assistant.py checkup    # 月度体检
+  python assistant.py diary      # 记一笔今日日记(纯文本追加,不调 LLM)
+  python assistant.py diary_digest  # 用 LLM 整理本周日记
   python assistant.py test       # 测试 API 连通性
 
 首次使用:
@@ -43,6 +45,7 @@ SUBSYS = ROOT / "01_子系统"
 REVIEWS = ROOT / "02_每周复盘"
 RULES = ROOT / "规则库.md"
 KB_DIR = SUBSYS / "学习成长_知识库"
+DIARY = ROOT / "03_每日日记"
 
 # ── 模型注册表(单一真相源;CLI + 网页统一从这里读 active)──────────
 MODELS_JSON = TOOLS / "models.json"
@@ -217,13 +220,24 @@ def read_file(p):
 
 def system_context():
     parts = ["# 这是我的「个人总体设计部」系统当前状态\n"]
+    user = read_file(ROOT / "00_用户画像.md")
+    if user:
+        parts.append("## 用户画像\n" + user)
     parts.append("## 总纲领\n" + read_file(ROOT / "00_总纲领.md"))
     parts.append("## 规则库\n" + read_file(RULES))
+    ext = read_file(KB_DIR / "记忆提炼_外部经验.md")
+    if ext:
+        parts.append("## 外部经验(记忆提炼)\n" + ext)
     for name in ["研究工作", "学习成长", "复盘进化"]:
         parts.append(f"## 子系统:{name}\n" + read_file(SUBSYS / f"{name}.md"))
     latest = latest_review()
     if latest:
         parts.append(f"## 上一份复盘({latest.name})\n" + read_file(latest))
+    if DIARY.exists():
+        recent_diaries = sorted(DIARY.glob("20*.md"))[-7:]
+        if recent_diaries:
+            parts.append("## 最近日记\n" + "\n\n".join(
+                f"### {p.name}\n{read_file(p)}" for p in recent_diaries))
     return "\n\n".join(parts)
 
 def latest_review():
@@ -315,6 +329,70 @@ def mode_pit(cfg):
     ])
     print("\n" + out)
 
+# ── 每日日记(纯文本追加,不调 LLM;周整理才调 LLM)──────────
+def append_diary(text):
+    """把一条日记追加到今天的 03_每日日记/YYYY-MM-DD.md(带 HH:MM 时间戳)。
+    纯文本追加,不调 LLM,不覆盖。网页 / CLI 共用此函数。
+    日记=原始流水(只追加不提炼),与复盘/周整理(提炼)分工严格分开。"""
+    text = (text or "").strip()
+    if not text:
+        return {"error": "日记内容不能为空"}
+    DIARY.mkdir(parents=True, exist_ok=True)
+    path = DIARY / f"{today_str()}.md"
+    if not path.exists():
+        path.write_text(f"# {today_str()} 日记\n", encoding="utf-8")
+    stamp = datetime.datetime.now().strftime("%H:%M")
+    with open(path, "a", encoding="utf-8") as f:
+        f.write(f"- {stamp} {text}\n")
+    return {"ok": True, "path": str(path), "date": today_str()}
+
+def mode_diary():
+    """CLI 记一笔:读一行输入,追加到今天的日记。不调 LLM。"""
+    text = ask("今天想记点什么?(做了什么 / 收获 / 想法,一句话也行)")
+    if not text:
+        print("空内容,没记。")
+        return
+    r = append_diary(text)
+    if r.get("ok"):
+        print(f"✅ 已记进 {r['path']}")
+    else:
+        print("❌ " + r.get("error", "未知错误"))
+
+def run_diary_digest(cfg):
+    """读最近 7 天日记 → 调 LLM 整理 → 写 _周整理_YYYY-WW.md → 返回整理文本。
+    CLI(mode_diary_digest)和网页(/api/diary_digest)共用此核心。
+    _周整理_ 前缀下划线 → 不被 glob('20*.md') 当日记,不污染日记列表。"""
+    DIARY.mkdir(parents=True, exist_ok=True)
+    files = sorted(DIARY.glob("20*.md"))
+    today = datetime.date.today()
+    week = [p for p in files
+            if (today - datetime.date.fromisoformat(p.stem)).days <= 7]
+    if not week:
+        return {"error": "最近 7 天没有日记,先记几笔再整理。"}
+    diaries = "\n\n".join(f"### {p.name}\n{read_file(p)}" for p in week)
+    ctx = system_context()
+    out = call_llm(cfg, [
+        {"role": "system", "content": SYSTEM_ROLE},
+        {"role": "user", "content": P.diary_digest(ctx, diaries)},
+    ])
+    iso = today.isocalendar()  # (year, week, weekday)
+    digest_path = DIARY / f"_周整理_{iso[0]}-{iso[1]:02d}.md"
+    digest_path.write_text(
+        f"# 日记周整理 {iso[0]}-W{iso[1]:02d}\n\n"
+        f"> 本周日记({week[0].stem}~{week[-1].stem})的 LLM 整理。\n\n{out}\n",
+        encoding="utf-8",
+    )
+    return {"ok": True, "path": str(digest_path), "text": out}
+
+def mode_diary_digest(cfg):
+    """CLI:整理本周日记(调 LLM)。"""
+    r = run_diary_digest(cfg)
+    if r.get("ok"):
+        print("\n" + r["text"])
+        print(f"\n✅ 已存到 {r['path']}")
+    else:
+        print("❌ " + r.get("error", "未知错误"))
+
 def mode_learn(cfg, arg):
     src = read_file(arg) if Path(arg).exists() else arg
     if not src:
@@ -331,8 +409,27 @@ def mode_learn(cfg, arg):
     print("\n" + out)
     print(f"\n✅ 已存到 {path}(可自行改名为更贴切的主题)")
 
+def _index_freshness():
+    """外部经验索引(记忆提炼_外部经验.md)的新鲜度检查。
+    防止一次性提炼的索引随时间腐烂(规则批准后双链漂移、方法论过时)。
+    返回提示语;超过 90 天提醒重炼——但只在体检里提示,不自动改(人点头才重炼)。"""
+    p = KB_DIR / "记忆提炼_外部经验.md"
+    if not p.exists():
+        return "⚠️ 外部经验索引不存在(记忆提炼_外部经验.md 未找到)。"
+    age_days = (datetime.date.today() - datetime.date.fromtimestamp(p.stat().st_mtime)).days
+    if age_days > 90:
+        return (f"⚠️ 外部经验索引已 {age_days} 天未更新(>3 个月)。"
+                f"上次提炼可能过时(规则批准后双链、方法论都可能漂移)——"
+                f"建议考虑重新提炼。重炼需你点头,我不会自动改。")
+    return f"外部经验索引新鲜度 OK(上次更新 {age_days} 天前)。"
+
+
 def mode_checkup(cfg):
     ctx = system_context()
+    fresh = _index_freshness()
+    print(fresh)
+    # 把新鲜度事实交给 LLM,让体检结论里也带上这条
+    ctx = ctx + f"\n\n## 体检补充:外部经验索引新鲜度\n{fresh}"
     recent = sorted(REVIEWS.glob("20*.md"))[-4:]
     revs = "\n\n".join(f"### {p.name}\n{read_file(p)}" for p in recent)
     out = call_llm(cfg, [
@@ -346,6 +443,10 @@ def main():
     if len(sys.argv) < 2:
         print(__doc__)
         return
+    # diary 纯文本追加,不调 LLM、不需要 API key —— 早返回避开 load_config 的 sys.exit
+    if sys.argv[1] == "diary":
+        mode_diary()
+        return
     cfg = load_config()
     mode = sys.argv[1]
     if mode == "test":
@@ -358,6 +459,8 @@ def main():
         mode_learn(cfg, sys.argv[2] if len(sys.argv) > 2 else "")
     elif mode == "checkup":
         mode_checkup(cfg)
+    elif mode == "diary_digest":
+        mode_diary_digest(cfg)
     else:
         print(__doc__)
 

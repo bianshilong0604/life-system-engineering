@@ -45,6 +45,7 @@ SUBSYS = A.SUBSYS
 REVIEWS = A.REVIEWS
 RULES = A.RULES
 KB_DIR = A.KB_DIR
+DIARY_DIR = A.DIARY
 CHARTER = ROOT / "00_总纲领.md"
 
 # 知识库规模"绊线":达到即提醒可考虑启动 GBrain（见 GBrain启动预案.md）
@@ -291,14 +292,13 @@ def rewrite_todo(subsystem, action, index=None, text=None):
 
 
 def parse_rules():
-    """规则库的 ## R{n} — {title} 标题（n 必须是数字，排除格式说明里的模板行）。"""
-    import re
+    """规则库的 ## R{n} — {title} 标题 + 该条正文(触发/类型/规则/日期)。
+    n 必须是数字(排除格式说明里的模板行)。正文供看板『点单条就地展开』用。"""
     out = []
-    for line in A.read_file(RULES).splitlines():
-        s = line.strip()
-        m = re.match(r"^##\s+R(\d+)\s*[—-]\s*(.+)$", s)
-        if m:
-            out.append({"n": m.group(1), "title": m.group(2).strip()})
+    lines = A.read_file(RULES).splitlines()
+    for s, e, n, title in _rule_blocks(lines):
+        body = "\n".join(lines[s + 1:e]).strip()
+        out.append({"n": n, "title": title, "body": body})
     return out
 
 def parse_subsystem(name):
@@ -338,6 +338,33 @@ def parse_reviews():
     files = sorted(REVIEWS.glob("20*.md"), reverse=True)
     return [{"name": p.stem, "path": str(p)} for p in files]
 
+def parse_diary():
+    """03_每日日记/ 下的 20*.md,按日期倒序。每天含多条 HH:MM 条目。
+    _周整理_ 前缀文件不被 glob('20*') 匹配,自动排除。"""
+    if not DIARY_DIR.exists():
+        return []
+    out = []
+    for p in sorted(DIARY_DIR.glob("20*.md"), reverse=True):
+        raw = p.read_text(encoding="utf-8")
+        lines = [l for l in raw.splitlines() if l.strip() and not l.startswith("#")]
+        preview = ""
+        for l in lines:
+            if l.startswith("- "):
+                rest = l[2:]
+                # 去 "HH:MM " 前缀
+                if len(rest) > 5 and rest[2] == ":":
+                    rest = rest[5:].lstrip()
+                preview = rest[:40]
+                break
+        out.append({
+            "name": p.stem,
+            "short": p.stem[5:],   # MM-DD
+            "count": len(lines),
+            "preview": preview,
+            "body": "\n".join(lines),
+        })
+    return out
+
 def parse_kb():
     """学习成长_知识库/ 下的条目（可能为空）。"""
     if not KB_DIR.exists():
@@ -370,6 +397,7 @@ def gather_data():
         "subsystems": [parse_subsystem(n) for n in ["研究工作", "学习成长", "复盘进化"]],
         "rules": parse_rules(),
         "reviews": parse_reviews(),
+        "diary": parse_diary(),
         "kb": parse_kb(),
         "jianwen": parse_jianwen(),
         "candidates": parse_candidates(),
@@ -758,12 +786,15 @@ def render_page(data):
         </div>'''
 
     rules = "".join(
-        f'<div class="note" data-path="{esc(RULES)}">'
-        f'<span class="rid">R{esc(r["n"])}</span><span class="rule-text">{esc(r["title"])}</span>'
+        f'<div class="rule-row" onclick="ruleToggle({i})">'
+        f'<span class="rid">R{esc(r["n"])}</span>'
+        f'<span class="rule-text">{esc(r["title"])}</span>'
+        f'<span class="rarrow">▸</span>'
         f'<span class="cons-btns">'
         f'<button class="cons-act" title="编辑" onclick="event.stopPropagation();ruleEdit({i})">✏️</button>'
         f'<button class="cons-act del" title="删除" onclick="event.stopPropagation();ruleDel({i},this)">🗑</button>'
         f'</span></div>'
+        f'<div class="rule-detail" id="rd-{i}">{md_to_html(r["body"])}</div>'
         for i, r in enumerate(data["rules"])
     ) or '<div class="empty">规则库还没有规则</div>'
     rules += '<div class="cons-add"><button class="cons-add-btn" onclick="ruleAdd()">+ 添加规则</button></div>'
@@ -865,6 +896,32 @@ def render_page(data):
     else:
         cand_card = ""
 
+    # 每日日记(纯文本追加 + 折叠看当天全文 + 本周 AI 整理)
+    diary = data.get("diary", [])
+    if diary:
+        drows = "".join(
+            f'''<div class="rule-row diary-row" onclick="diaryToggle({i})">
+          <span class="rid">📅 {esc(d["short"])}</span>
+          <span class="rule-text">{esc(d["count"])} 条 · {esc(d["preview"])}{"…" if len(d["preview"]) >= 40 else ""}</span>
+          <span class="rarrow">▸</span>
+        </div>
+        <div class="rule-detail" id="dd-{i}">{md_to_html(d["body"])}</div>'''
+            for i, d in enumerate(diary))
+        diary_empty = ""
+    else:
+        drows = ""
+        diary_empty = '<div class="empty">还没记过 — 写一句,点「记一笔」开始。不打卡、不评分,流水而已。</div>'
+    diary_html = (
+        '<div class="diary-box">'
+        '<div class="diary-input-row">'
+        '<textarea id="diary-input" placeholder="今天想记点什么…(做了什么/收获/想法,一句话也行)"></textarea>'
+        '<button class="diary-add-btn" onclick="diarySubmit()">✏ 记一笔</button>'
+        '</div>'
+        '<button class="model-btn diary-digest-btn" onclick="diaryDigest()">🔍 用 AI 整理本周日记</button>'
+        f'{diary_empty}{drows}'
+        '</div>'
+    )
+
     # 当前 active 模型(供顶栏按钮 + AI 卡片标题动态显示)
     try:
         am = A.active_model() or {}
@@ -878,6 +935,7 @@ def render_page(data):
                .replace("{{SUBS}}", subs) \
                .replace("{{RULES}}", rules) \
                .replace("{{REVIEWS}}", reviews) \
+               .replace("{{DIARY_CARD}}", diary_html) \
                .replace("{{KB}}", kb) \
                .replace("{{JIANWEN}}", jw_rows) \
                .replace("{{JIANWEN_DONE}}", done_html) \
@@ -947,6 +1005,33 @@ PAGE = r"""<!DOCTYPE html>
   .note .when{margin-left:auto;color:var(--terra);font-size:13px;font-style:italic}
   .note .cons-btns,.ln .cons-btns{opacity:0;transition:.15s;margin-left:auto;flex-shrink:0}
   .note:hover .cons-btns,.ln:hover .cons-btns{opacity:1}
+  .rule-row{padding:10px 0;border-bottom:1px dashed var(--line);font-size:14px;cursor:pointer;display:flex;align-items:center;gap:8px}
+  .rule-row:hover{color:var(--terra)}
+  .rule-row .rid{color:var(--gold);font-weight:700;margin-right:8px;font-family:var(--num)}
+  .rule-row .rule-text{flex:1;min-width:0}
+  .rule-row .rarrow{color:var(--txt-dim);font-size:12px;transition:transform .15s}
+  .rule-row.open .rarrow{transform:rotate(90deg)}
+  .rule-row .cons-btns{opacity:0;transition:opacity .15s;margin-left:auto;flex-shrink:0}
+  .rule-row:hover .cons-btns{opacity:1}
+  .rule-detail{display:none;padding:6px 0 10px 36px;color:var(--txt-dim);font-size:13px;line-height:1.7}
+  .rule-detail.show{display:block}
+  .rule-detail ul{margin:4px 0;padding-left:18px}
+  .rule-detail li{margin:2px 0}
+  .diary-box{display:flex;flex-direction:column;gap:14px}
+  .diary-input-row{display:flex;gap:10px;align-items:stretch}
+  .diary-input-row textarea{flex:1;min-height:54px;border:1px solid var(--terra-soft);border-radius:12px;
+    padding:10px 12px;font-family:inherit;font-size:14px;resize:vertical;background:#fffdf9;color:var(--txt);
+    transition:border-color .16s,box-shadow .16s}
+  .diary-input-row textarea:focus{outline:none;border-color:var(--terra);box-shadow:0 0 0 3px rgba(194,105,63,.15)}
+  .diary-add-btn{align-self:stretch;white-space:nowrap;font-family:inherit;font-size:15px;font-weight:700;
+    color:#fff;background:linear-gradient(135deg,#d6794a 0%,var(--terra) 55%,#b85c2c 100%);
+    border:none;border-radius:14px;padding:0 26px;cursor:pointer;
+    display:inline-flex;align-items:center;gap:6px;box-shadow:0 4px 12px rgba(194,105,63,.28);
+    transition:transform .16s,box-shadow .16s,filter .16s}
+  .diary-add-btn:hover{transform:translateY(-2px);box-shadow:0 8px 20px rgba(194,105,63,.38);filter:brightness(1.05)}
+  .diary-add-btn:active{transform:translateY(0);box-shadow:0 3px 8px rgba(194,105,63,.26)}
+  .diary-add-btn:disabled{opacity:.55;cursor:wait;transform:none}
+  .diary-digest-btn{align-self:flex-start}
   .cons-add-btn.sm{font-size:13px;padding:4px 12px}
   .actions{display:grid;grid-template-columns:repeat(2,1fr);gap:16px}
   .btn{background:var(--terra-soft);border:1px solid #e6c4ab;border-radius:16px;
@@ -1175,11 +1260,16 @@ PAGE = r"""<!DOCTYPE html>
     </div>
   </div>
 
-  {{CAND_CARD}}
-
   <div class="card">
     <h2>知识库</h2>
     {{KB}}
+  </div>
+
+  {{CAND_CARD}}
+
+  <div class="card">
+    <h2>📓 每日日记 · 原始流水(只追加,不提炼)</h2>
+    {{DIARY_CARD}}
   </div>
 
   <div class="card">
@@ -1645,6 +1735,42 @@ PAGE = r"""<!DOCTYPE html>
       .then(function(r){return r.json();})
       .then(function(d){ if(d.error) showToast(d.error); else softReload(); });
   }
+  function ruleToggle(i){
+    var row=document.querySelectorAll('.rule-row')[i];
+    var d=document.getElementById('rd-'+i);
+    if(!row||!d) return;
+    var open=d.classList.toggle('show');
+    row.classList.toggle('open', open);
+  }
+  function diaryToggle(i){
+    var row=document.querySelectorAll('.diary-row')[i];
+    var d=document.getElementById('dd-'+i);
+    if(!row||!d) return;
+    var open=d.classList.toggle('show');
+    row.classList.toggle('open', open);
+  }
+  async function diarySubmit(){
+    var text=document.getElementById('diary-input').value.trim();
+    if(!text){ showToast('写一句再记'); return; }
+    try{
+      var r=await fetch('/api/diary',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'add',text:text})});
+      var d=await r.json();
+      if(d.error){ showToast(d.error); return; }
+      document.getElementById('diary-input').value='';
+      showToast('✅ 已记进 '+d.date);
+      softReload();
+    }catch(e){ showToast('请求失败:'+e); }
+  }
+  async function diaryDigest(){
+    showToast('🔍 正在整理本周日记…');
+    try{
+      var r=await fetch('/api/diary_digest',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});
+      var d=await r.json();
+      if(d.error){ showToast(d.error); return; }
+      showToast('✅ 已整理本周日记,结果存进 03_每日日记/');
+      softReload();
+    }catch(e){ showToast('请求失败:'+e); }
+  }
   // 进行中事项:逐条增/删/改(写回 01_子系统/{name}.md),解除 2 件上限
   function todoOpen(title, action, subsystem, index, text){
     window.__todoAction=action; window.__todoSub=subsystem; window.__todoIndex=index;
@@ -1844,6 +1970,12 @@ class Handler(BaseHTTPRequestHandler):
         if parsed.path == "/api/todo":
             self._handle_todo()
             return
+        if parsed.path == "/api/diary":
+            self._handle_diary()
+            return
+        if parsed.path == "/api/diary_digest":
+            self._handle_diary_digest()
+            return
         if parsed.path == "/api/models":
             self._handle_models()
             return
@@ -1975,6 +2107,31 @@ class Handler(BaseHTTPRequestHandler):
                 body.get("index"),
                 body.get("text"),
             )
+        except Exception as e:
+            result = {"error": str(e)}
+        self._send(200, json.dumps(result, ensure_ascii=False))
+
+    def _handle_diary(self):
+        length = int(self.headers.get("Content-Length", 0))
+        try:
+            body = json.loads(self.rfile.read(length).decode("utf-8")) if length else {}
+        except Exception:
+            self._send(400, json.dumps({"error": "bad json"}))
+            return
+        try:
+            if body.get("action") == "add":
+                result = A.append_diary(body.get("text", ""))
+            else:
+                result = {"error": "未知操作"}
+        except Exception as e:
+            result = {"error": str(e)}
+        self._send(200, json.dumps(result, ensure_ascii=False))
+
+    def _handle_diary_digest(self):
+        try:
+            result = A.run_diary_digest(_cfg())
+        except SystemExit as e:
+            result = {"error": str(e)}
         except Exception as e:
             result = {"error": str(e)}
         self._send(200, json.dumps(result, ensure_ascii=False))
