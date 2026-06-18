@@ -346,6 +346,41 @@ def append_diary(text):
         f.write(f"- {stamp} {text}\n")
     return {"ok": True, "path": str(path), "date": today_str()}
 
+def _diary_line_indexes(lines):
+    """返回所有 '- ' 条目行在 lines 里的真实下标列表(顺序=前端 entries 顺序)。"""
+    return [i for i, l in enumerate(lines) if l.startswith("- ")]
+
+def edit_diary(date, index, text):
+    """编辑某天第 index 条日记(保留原 HH:MM 时间戳,只换正文)。"""
+    text = (text or "").strip()
+    if not text:
+        return {"error": "日记内容不能为空"}
+    path = DIARY / f"{date}.md"
+    if not path.exists():
+        return {"error": f"{date} 的日记文件不存在"}
+    lines = path.read_text(encoding="utf-8").splitlines()
+    idxs = _diary_line_indexes(lines)
+    if index is None or index < 0 or index >= len(idxs):
+        return {"error": "条目不存在(可能已被改动,刷新重试)"}
+    raw = lines[idxs[index]][2:]
+    stamp = raw[:5] if (len(raw) > 5 and raw[2] == ":") else ""
+    lines[idxs[index]] = f"- {stamp} {text}".rstrip() if stamp else f"- {text}"
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return {"ok": True, "date": date}
+
+def delete_diary(date, index):
+    """删除某天第 index 条日记。"""
+    path = DIARY / f"{date}.md"
+    if not path.exists():
+        return {"error": f"{date} 的日记文件不存在"}
+    lines = path.read_text(encoding="utf-8").splitlines()
+    idxs = _diary_line_indexes(lines)
+    if index is None or index < 0 or index >= len(idxs):
+        return {"error": "条目不存在(可能已被改动,刷新重试)"}
+    del lines[idxs[index]]
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return {"ok": True, "date": date}
+
 def mode_diary():
     """CLI 记一笔:读一行输入,追加到今天的日记。不调 LLM。"""
     text = ask("今天想记点什么?(做了什么 / 收获 / 想法,一句话也行)")

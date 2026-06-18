@@ -4,7 +4,7 @@
 个人总体设计部 · 可视化看板（本地服务器）
 ============================================
 纯 Python 标准库，零 pip 依赖。读你的真实 MD 文件渲染看板，
-并复用 assistant.py 调用你配置的 LLM 触发 AI 复盘。
+并复用 assistant.py 调用 SenseNova 触发 AI 复盘。
 
 用法:
   python server.py            # 启动并自动打开浏览器
@@ -860,7 +860,7 @@ def render_page(data):
           </div>
         </div>'''
     if not pending:
-        jw_rows = '<div class="empty">见闻池没有待筛选的条目 — 用 jianwen.py 入池视频总结或灵感，会汇集到这里</div>'
+        jw_rows = '<div class="empty">见闻池没有待筛选的条目 — 通过聊天机器人发视频链接或灵感给我，会自动汇集到这里</div>'
     done_html = ""
     if done:
         done_rows = "".join(
@@ -1947,8 +1947,43 @@ class Handler(BaseHTTPRequestHandler):
             self._send(200, json.dumps(result, ensure_ascii=False))
         elif parsed.path == "/api/models":
             self._send(200, json.dumps(models_payload(), ensure_ascii=False))
+        elif parsed.path == "/mobile":
+            try:
+                import mobile_ui as M
+                page = M.render_page(M._get_data())
+            except Exception as e:
+                page = f"<h1>手机端出错</h1><pre>{esc(e)}</pre>"
+            self._send(200, page, "text/html; charset=utf-8")
+        elif parsed.path == "/mobile/api/data":
+            try:
+                import mobile_ui as M
+                self._send(200, json.dumps(M._get_data(), ensure_ascii=False))
+            except Exception as e:
+                self._send(500, json.dumps({"error": str(e)}, ensure_ascii=False))
+        elif parsed.path == "/mobile/api/write":
+            self._handle_mobile_write()
         else:
             self._send(404, json.dumps({"error": "not found"}))
+
+    def _handle_mobile_write(self):
+        length = int(self.headers.get("Content-Length", 0))
+        try:
+            body = json.loads(self.rfile.read(length).decode("utf-8")) if length else {}
+        except Exception:
+            self._send(400, json.dumps({"error": "bad json"}))
+            return
+        text = body.get("text", "").strip()
+        if not text:
+            self._send(400, json.dumps({"error": "内容不能为空"}))
+            return
+        msg_type = body.get("type", "diary")
+        try:
+            from diary_add import append_diary_with_ai
+            # 灵感已合并进日记,统一走 diary
+            r = append_diary_with_ai(text)
+            self._send(200, json.dumps(r, ensure_ascii=False) if r.get("ok") else json.dumps(r, ensure_ascii=False))
+        except Exception as e:
+            self._send(500, json.dumps({"error": str(e)}, ensure_ascii=False))
 
     def do_POST(self):
         parsed = urllib.parse.urlparse(self.path)
@@ -1978,6 +2013,9 @@ class Handler(BaseHTTPRequestHandler):
             return
         if parsed.path == "/api/models":
             self._handle_models()
+            return
+        if parsed.path == "/mobile/api/write":
+            self._handle_mobile_write()
             return
         if parsed.path != "/api/ai":
             self._send(404, json.dumps({"error": "not found"}))
@@ -2121,6 +2159,10 @@ class Handler(BaseHTTPRequestHandler):
         try:
             if body.get("action") == "add":
                 result = A.append_diary(body.get("text", ""))
+            elif body.get("action") == "edit":
+                result = A.edit_diary(body.get("date", ""), body.get("index"), body.get("text", ""))
+            elif body.get("action") == "delete":
+                result = A.delete_diary(body.get("date", ""), body.get("index"))
             else:
                 result = {"error": "未知操作"}
         except Exception as e:
@@ -2183,7 +2225,7 @@ def find_port(start=8770):
 
 def main():
     port = find_port()
-    srv = ThreadingHTTPServer(("127.0.0.1", port), Handler)
+    srv = ThreadingHTTPServer(("0.0.0.0", port), Handler)
     url = f"http://127.0.0.1:{port}/"
     print(f"✅ 看板已启动: {url}")
     print("   关闭：在此终端按 Ctrl+C")
